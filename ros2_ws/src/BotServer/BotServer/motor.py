@@ -5,13 +5,17 @@
 
 import pigpio
 import time
-
-ENCODER_PPR=100 # 100 pulses per revolution
-PWM_FREQ=25000 # 25kHz PWM frequency
-PWM_FULL_SCALE = 255 # 8-bit PWM
-WHEEL_DIAMETER = 0.064 # wheel diameter in meters
+import os
+import threading
 
 class Motor_24H():
+    
+    ENCODER_PPR=100 # 100 pulses per revolution
+    PWM_FREQ=25000 # 25kHz PWM frequency
+    PWM_FULL_SCALE = 255 # 8-bit PWM
+    WHEEL_DIAMETER = 0.064 # wheel diameter in meters
+    MAX_RPM = 3035 # max RPM of the motor, no load
+    DEFAULT_ACCEL_RPMPS = 200 # default acceleration in RPM/s
       
     def __init__(self, rpi, pwm_port:int, dir_port:int, enc_a_port:int, enc_b_port:int, forward_dir:int, wheel_diam=WHEEL_DIAMETER):
         '''
@@ -23,9 +27,6 @@ class Motor_24H():
         forward_dir: 1 for CW, 0 for CCW
         '''
         
-        init_done = False
-        
-        # set pins
         self.pi = rpi
         self.pwm_pin   = pwm_port
         self.dir_pin   = dir_port
@@ -42,14 +43,40 @@ class Motor_24H():
         self.pi.set_mode(self.enc_b_pin, pigpio.INPUT)
         
         # init PWM to off
-        self.pi.set_PWM_range(self.pwm_pin,PWM_FULL_SCALE)
-        self.pi.set_PWM_frequency(self.pwm_pin, PWM_FREQ)
-        self.pi.set_PWM_dutycycle(self.pwm_pin, PWM_FULL_SCALE) # inverted; this is actually off
+        self.pi.set_PWM_range(self.pwm_pin,self.PWM_FULL_SCALE)
+        self.pi.set_PWM_frequency(self.pwm_pin, self.PWM_FREQ)
+        self.pi.set_PWM_dutycycle(self.pwm_pin, self.PWM_FULL_SCALE) # inverted; this is actually off
         
         # init direction to forward
         self.pi.write(self.dir_pin, self.forward_dir)
         
-    def set_duty_inv(self,duty:float)->bool:
+        # init encoder variables
+        self.encoder_count = 0
+        self.last_time = time.time()
+        self.pi.callback(self.enc_a_pin, pigpio.FALLING_EDGE, self.__encoder_callback)
+        # self.pi.callback(self.enc_b_pin, pigpio.FALLING_EDGE, self.__encoder_callback)
+
+    def __encoder_callback(self, gpio, level, tick):
+        '''
+        callback function for encoder pulses
+        '''
+        self.encoder_count += 1
+    
+    def get_velocity_from_enc(self)->float:
+        '''
+        returns the current angular velocity in RPM
+        takes values directly from the encoder
+        '''
+        current_time = time.time()
+        delta_time = current_time - self.last_time
+        self.last_time = current_time
+        delta_count = self.encoder_count
+        self.encoder_count = 0
+        
+        # TODO handle polarity when using both encoder channels
+        return delta_count / self.ENCODER_PPR / delta_time * 60
+    
+    def __set_duty(self,duty:float)->bool:
             '''
             duty percent, not inverted
             '''
@@ -57,40 +84,62 @@ class Motor_24H():
             
             return self.pi.set_PWM_dutycycle(self.pwm_pin, duty)
         
-    def get_duty_inv(self)->float:
+    def __get_duty(self)->float:
         '''
         returns the inverted duty cycle as a percentage
         '''
         duty = self.pi.get_PWM_dutycycle(self.pwm_pin)
         return 100 - (duty / 255 * 100)
-        
     
-    def set_velocity(self, velocity:float):
-        '''
-        velocity: velocity in m/s
-        nonlinear duty cycle makes this kinda hard ngl
-        '''
-        pass
+    def stop(self):
+        self.__set_duty(0)
         
-    def __del__(self):
-        self.pi.set_PWM_dutycycle(self.pwm_pin, 255) # inverted; this is actually off
+    def set_velocity(self, velocity_rpm:float, accel_rpm_ps:float=200):
+        '''
+        velocity_rpm: target angular velocity in RPM
+        accel_rpm_ps: acceleration in RPM/s (default 200)
+        '''
+        self.velocity_rpm = velocity_rpm
+        
+        if velocity_rpm == 0:
+            self.stop()
+            return
+        
+        # set direction
+        self.pi.write(self.dir_pin,
+                      self.forward_dir if velocity_rpm > 0 else abs(self.forward_dir - 1))
+        # set duty cycle
+        self.__set_duty(abs(velocity_rpm) / self.MAX_RPM * 100)
+        
+    def get_setpoint_vel(self)->float:
+        '''
+        returns the current angular velocity in RPM
+        '''
+        return self.velocity_rpm
+        
+    # def __del__(self): # TODO destructor doesn't work
+    #     self.stop()
 
-def main():
+    
+
+if __name__ == '__main__':
+    try:
+        os.system('sudo pigpiod') # start pigpio daemon
+    except:
+        assert RuntimeError("Failed to start pigpio daemon")
+    
     pi = pigpio.pi()
     left_motor = Motor_24H(pi,13,26,17,27,0)
     right_motor = Motor_24H(pi,12,16,23,24,1)
     
-    left_motor.set_duty_inv(10)
-    right_motor.set_duty_inv(10)
+    left_motor.set_velocity(velocity_rpm=60)
+    right_motor.set_velocity(velocity_rpm=60)
     
     try:
         while True:
+            print(f"Left:{round(left_motor.get_velocity_from_enc(),2)}/Right:{round(right_motor.get_velocity_from_enc(),2)}")
             time.sleep(1)
     except KeyboardInterrupt:
-        left_motor.set_duty_inv(0)
-        right_motor.set_duty_inv(0)
-    
-
-if __name__ == '__main__':
-    main()
-        
+        left_motor.stop()
+        right_motor.stop()
+        pi.stop()

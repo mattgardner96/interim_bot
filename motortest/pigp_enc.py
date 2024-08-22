@@ -17,13 +17,13 @@ encoder_pin_a = 17
 encoder_pin_b = 27
 
 # Set up GPIO pins
-pi.set_mode(pwm_pin, pigpio.OUTPUT)
+pi.set_mode(pwm_pin, pigpio.ALT0)
 pi.set_mode(dir_pin, pigpio.OUTPUT)
 pi.set_mode(encoder_pin_a, pigpio.INPUT)
 pi.set_mode(encoder_pin_b, pigpio.INPUT)
 
 # Set up direction
-pi.write(dir_pin, 1)
+pi.write(dir_pin, 0) # 1 is CW, 0 is CCW
 
 # Initialize PWM
 pi.set_PWM_frequency(pwm_pin, PWM_FREQUENCY)

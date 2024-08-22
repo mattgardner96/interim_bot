@@ -12,9 +12,7 @@ PWM_FULL_SCALE = 255 # 8-bit PWM
 WHEEL_DIAMETER = 0.064 # wheel diameter in meters
 
 class Motor_24H():
-    
-    pi = None # this is the pigpio.pi() object
-    
+      
     def __init__(self, rpi, pwm_port:int, dir_port:int, enc_a_port:int, enc_b_port:int, forward_dir:int):
         '''
         rpi: pigpio.pi() object for controlling GPIO pins to drive motors
@@ -37,6 +35,7 @@ class Motor_24H():
         
         # init the pins and their init states
         self.pi.set_mode(self.pwm_pin, pigpio.ALT0)
+        self.pi.write(self.pwm_pin, 1) # inverted; this is actually off
         self.pi.set_mode(self.dir_pin, pigpio.OUTPUT)
         self.pi.set_mode(self.enc_a_pin, pigpio.INPUT)
         self.pi.set_mode(self.enc_b_pin, pigpio.INPUT)
@@ -44,7 +43,7 @@ class Motor_24H():
         # init PWM to off
         self.pi.set_PWM_range(self.pwm_pin,PWM_FULL_SCALE)
         self.pi.set_PWM_frequency(self.pwm_pin, PWM_FREQ)
-        self.pi.write(self.pwm_pin, PWM_FULL_SCALE) # inverted; this is actually off
+        self.pi.set_PWM_dutycycle(self.pwm_pin, PWM_FULL_SCALE) # inverted; this is actually off
         
         # init direction to forward
         self.pi.write(self.dir_pin, self.forward_dir)
@@ -55,7 +54,7 @@ class Motor_24H():
             '''
             duty = 255 * (100 - duty) / 100
             
-            return self.set_PWM_dutycycle(self.pwm_pin, duty)
+            return self.pi.set_PWM_dutycycle(self.pwm_pin, duty)
         
     def get_duty_inv(self)->float:
         '''
@@ -79,8 +78,8 @@ def main():
     left_motor = Motor_24H(pi,13,26,17,27,0)
     right_motor = Motor_24H(pi,12,16,23,24,1)
     
-    left_motor.set_duty_inv(5)
-    right_motor.set_duty_inv(5)
+    left_motor.set_duty_inv(1)
+    right_motor.set_duty_inv(1)
     
     try:
         while True:

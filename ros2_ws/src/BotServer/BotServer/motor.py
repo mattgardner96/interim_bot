@@ -13,7 +13,7 @@ WHEEL_DIAMETER = 0.064 # wheel diameter in meters
 
 class Motor_24H():
       
-    def __init__(self, rpi, pwm_port:int, dir_port:int, enc_a_port:int, enc_b_port:int, forward_dir:int):
+    def __init__(self, rpi, pwm_port:int, dir_port:int, enc_a_port:int, enc_b_port:int, forward_dir:int, wheel_diam=WHEEL_DIAMETER):
         '''
         rpi: pigpio.pi() object for controlling GPIO pins to drive motors
         pwm_pin: BCM pin number for PWM signal
@@ -32,6 +32,7 @@ class Motor_24H():
         self.enc_a_pin = enc_a_port
         self.enc_b_pin = enc_b_port
         self.forward_dir = forward_dir
+        self.wheel_diam = wheel_diam
         
         # init the pins and their init states
         self.pi.set_mode(self.pwm_pin, pigpio.ALT0)
@@ -67,6 +68,7 @@ class Motor_24H():
     def set_velocity(self, velocity:float):
         '''
         velocity: velocity in m/s
+        nonlinear duty cycle makes this kinda hard ngl
         '''
         pass
         
@@ -78,8 +80,8 @@ def main():
     left_motor = Motor_24H(pi,13,26,17,27,0)
     right_motor = Motor_24H(pi,12,16,23,24,1)
     
-    left_motor.set_duty_inv(1)
-    right_motor.set_duty_inv(1)
+    left_motor.set_duty_inv(10)
+    right_motor.set_duty_inv(10)
     
     try:
         while True:
@@ -92,8 +94,3 @@ def main():
 if __name__ == '__main__':
     main()
         
-        
-        
-        
-    
-    

@@ -8,6 +8,8 @@ import time
 import os
 import threading
 
+
+
 class Motor_24H():
     
     ENCODER_PPR=100 # 100 pulses per revolution
@@ -56,26 +58,6 @@ class Motor_24H():
         self.pi.callback(self.enc_a_pin, pigpio.FALLING_EDGE, self.__encoder_callback)
         # self.pi.callback(self.enc_b_pin, pigpio.FALLING_EDGE, self.__encoder_callback)
 
-    def __encoder_callback(self, gpio, level, tick):
-        '''
-        callback function for encoder pulses
-        '''
-        self.encoder_count += 1
-    
-    def get_velocity_from_enc(self)->float:
-        '''
-        returns the current angular velocity in RPM
-        takes values directly from the encoder
-        '''
-        current_time = time.time()
-        delta_time = current_time - self.last_time
-        self.last_time = current_time
-        delta_count = self.encoder_count
-        self.encoder_count = 0
-        
-        # TODO handle polarity when using both encoder channels
-        return delta_count / self.ENCODER_PPR / delta_time * 60
-    
     def __set_duty(self,duty:float)->bool:
             '''
             duty percent, not inverted
@@ -90,6 +72,26 @@ class Motor_24H():
         '''
         duty = self.pi.get_PWM_dutycycle(self.pwm_pin)
         return 100 - (duty / 255 * 100)
+    
+    def __encoder_callback(self, gpio, level, tick):
+        '''
+        callback function for encoder pulses
+        '''
+        self.encoder_count += 1
+    
+    def get_curr_vel(self)->float:
+        '''
+        returns the current angular velocity in RPM
+        takes values directly from the encoder
+        '''
+        current_time = time.time()
+        delta_time = current_time - self.last_time
+        self.last_time = current_time
+        delta_count = self.encoder_count
+        self.encoder_count = 0
+        
+        # TODO handle polarity when using both encoder channels
+        return delta_count / self.ENCODER_PPR / delta_time * 60
     
     def stop(self):
         self.__set_duty(0)
@@ -117,10 +119,37 @@ class Motor_24H():
         '''
         return self.velocity_rpm
         
+    def cl_vel_ctrl(self, setpoint_vel:float, accel_rpm_ps:float=200):
+        '''
+        setpoint_vel: target angular velocity in RPM
+        accel_rpm_ps: acceleration in RPM/s (default 200)
+        '''
+        current_vel = self.get_curr_vel()
+        if setpoint_vel == 0:
+            self.stop()
+            return
+        
+        if setpoint_vel > current_vel:
+            while current_vel < setpoint_vel:
+                try:
+                    current_vel = self.get_curr_vel()
+                    self.set_velocity(current_vel + accel_rpm_ps)
+                    time.sleep(0.1)
+                except KeyboardInterrupt:
+                    self.stop()
+                    return
+        else:
+            while current_vel > setpoint_vel:
+                try:
+                    current_vel = self.get_curr_vel()
+                    self.set_velocity(current_vel - accel_rpm_ps)
+                    time.sleep(0.1)
+                except KeyboardInterrupt:
+                    self.stop()
+                    return
+    
     # def __del__(self): # TODO destructor doesn't work
     #     self.stop()
-
-    
 
 if __name__ == '__main__':
     try:
@@ -135,9 +164,17 @@ if __name__ == '__main__':
     left_motor.set_velocity(velocity_rpm=60)
     right_motor.set_velocity(velocity_rpm=60)
     
-    try:
+    def speed_print_daemon():
         while True:
-            print(f"Left:{round(left_motor.get_velocity_from_enc(),2)}/Right:{round(right_motor.get_velocity_from_enc(),2)}")
+            print(f"Left:{round(left_motor.get_curr_vel(),2)}/Right:{round(right_motor.get_curr_vel(),2)}")
+            time.sleep(1)
+    
+    speed_thread = threading.Thread(target=speed_print_daemon)
+    speed_thread.daemon = True
+    speed_thread.start()
+    
+    try:
+        while(True):
             time.sleep(1)
     except KeyboardInterrupt:
         left_motor.stop()

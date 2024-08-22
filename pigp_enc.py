@@ -5,7 +5,7 @@ import threading
 # Constants
 ENCODER_PPR = 100  # Encoder pulses per revolution
 PWM_FREQUENCY = 25000  # Fixed PWM frequency in Hz (25 kHz)
-INITIAL_PWM_DUTY_CYCLE = 20  # Initial motor speed as a percentage (e.g., 20%)
+INITIAL_PWM_DUTY_CYCLE = 10  # Initial motor speed as a percentage (e.g., 20%)
 
 # Set up pigpio
 pi = pigpio.pi()

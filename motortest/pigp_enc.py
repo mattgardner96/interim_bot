@@ -12,16 +12,22 @@ pi = pigpio.pi()
 
 # GPIO pins
 pwm_pin = 13
+dir_pin = 26
 encoder_pin_a = 17
 encoder_pin_b = 27
 
 # Set up GPIO pins
 pi.set_mode(pwm_pin, pigpio.OUTPUT)
+pi.set_mode(dir_pin, pigpio.OUTPUT)
 pi.set_mode(encoder_pin_a, pigpio.INPUT)
 pi.set_mode(encoder_pin_b, pigpio.INPUT)
 
+# Set up direction
+pi.write(dir_pin, 1)
+
 # Initialize PWM
 pi.set_PWM_frequency(pwm_pin, PWM_FREQUENCY)
+pi.set_PWM_range(pwm_pin, 255)
 # Inverted duty cycle: 0% duty cycle = full power, 100% duty cycle = no power
 initial_duty_cycle = 255 * (100 - INITIAL_PWM_DUTY_CYCLE) / 100
 pi.set_PWM_dutycycle(pwm_pin, initial_duty_cycle)
@@ -75,5 +81,5 @@ try:
 
 finally:
     # Clean up pigpio
-    pi.set_PWM_dutycycle(pwm_pin, 0)  # Ensure PWM is stopped
+    pi.set_PWM_dutycycle(pwm_pin, 255)  # Ensure PWM is stopped
     pi.stop()

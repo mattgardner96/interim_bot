@@ -20,8 +20,9 @@ some notes:
   - `pigpiod` needs to be built from source for Ubuntu, but that's fine honestly. took very little time
 
 but there are some issues:
-- need to add a big flyback across the 12V rail before connecting to a battery. currently the robot browns out during a huge PWM change, and takes 5 min to reconnect to wifi. oops
+- ~need to add a big flyback across the 12V rail before connecting to a battery. currently the robot browns out during a huge PWM change, and takes 5 min to reconnect to wifi. oops~
   - I'm actually unsure if this is an overcurrent trip or a noise coupling thing. these are both bad with tradeoffs.
+  - added the flyback, this has been mostly mitigated for now. it happened once on an 80% -> 10% jump, so maybe a bigger cap would help (at its own tradeoff risks). i'm just gonna fix it in software
 - motors can move, but I have no motor class yet
   - that class needs to accepts `forward_rotation_dir`, `pwm_freq_hz`, pinouts, and probably encoder stuff too for each motor
   - probably want a closed-loop speed control to make sure it moves under load. just speed control, no position shenanigans.

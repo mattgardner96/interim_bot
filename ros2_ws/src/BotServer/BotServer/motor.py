@@ -8,8 +8,6 @@ import time
 import os
 import threading
 
-
-
 class Motor_24H():
     
     ENCODER_PPR=100 # 100 pulses per revolution
@@ -110,7 +108,9 @@ class Motor_24H():
         # set direction
         self.pi.write(self.dir_pin,
                       self.forward_dir if velocity_rpm > 0 else abs(self.forward_dir - 1))
+        
         # set duty cycle
+        # simple linear interpolation between 0 and full-scale duty cycle
         self.__set_duty(abs(velocity_rpm) / self.MAX_RPM * 100)
         
     def get_setpoint_vel(self)->float:
@@ -118,65 +118,70 @@ class Motor_24H():
         returns the current angular velocity in RPM
         '''
         return self.velocity_rpm
-        
-    def cl_vel_ctrl(self, setpoint_vel:float, accel_rpm_ps:float=200):
-        '''
-        setpoint_vel: target angular velocity in RPM
-        accel_rpm_ps: acceleration in RPM/s (default 200)
-        '''
-        current_vel = self.get_curr_vel()
-        if setpoint_vel == 0:
-            self.stop()
-            return
-        
-        if setpoint_vel > current_vel:
-            while current_vel < setpoint_vel:
-                try:
-                    current_vel = self.get_curr_vel()
-                    self.set_velocity(current_vel + accel_rpm_ps)
-                    time.sleep(0.1)
-                except KeyboardInterrupt:
-                    self.stop()
-                    return
-        else:
-            while current_vel > setpoint_vel:
-                try:
-                    current_vel = self.get_curr_vel()
-                    self.set_velocity(current_vel - accel_rpm_ps)
-                    time.sleep(0.1)
-                except KeyboardInterrupt:
-                    self.stop()
-                    return
     
-    # def __del__(self): # TODO destructor doesn't work
-    #     self.stop()
+
+# closed-loop control should go somewhere...
+
+def speed_print_daemon(left_motor, right_motor):
+    while True:
+        print(f"Left:{round(left_motor.get_curr_vel(),2)}/Right:{round(right_motor.get_curr_vel(),2)}")
+        time.sleep(1)
+
+SPEED = 600
+
+def forward():
+    left_motor.set_velocity(velocity_rpm=SPEED)
+    right_motor.set_velocity(velocity_rpm=SPEED)
+    time.sleep(0.5)
+    
+def backward():
+    left_motor.set_velocity(velocity_rpm=-1 * SPEED)
+    right_motor.set_velocity(velocity_rpm=-1 * SPEED)
+    time.sleep(0.5)
+
+def left():
+    left_motor.set_velocity(velocity_rpm=-1 * SPEED)
+    right_motor.set_velocity(velocity_rpm=SPEED)
+    time.sleep(0.5)
+    
+def right():
+    left_motor.set_velocity(velocity_rpm=SPEED)
+    right_motor.set_velocity(velocity_rpm=-1 * SPEED)
+    time.sleep(0.5)
 
 if __name__ == '__main__':
     try:
         os.system('sudo pigpiod') # start pigpio daemon
     except:
-        assert RuntimeError("Failed to start pigpio daemon")
+        raise RuntimeError("Failed to start pigpio daemon")
     
     pi = pigpio.pi()
-    left_motor = Motor_24H(pi,13,26,17,27,0)
-    right_motor = Motor_24H(pi,12,16,23,24,1)
+    left_motor = Motor_24H(pi, 13, 26, 17, 27, 0)
+    right_motor = Motor_24H(pi, 12, 16, 23, 24, 1)
     
-    left_motor.set_velocity(velocity_rpm=60)
-    right_motor.set_velocity(velocity_rpm=60)
+    thread = threading.Thread(target=speed_print_daemon, args=(left_motor, right_motor))
+    thread.daemon = True
+    thread.start()
     
-    def speed_print_daemon():
-        while True:
-            print(f"Left:{round(left_motor.get_curr_vel(),2)}/Right:{round(right_motor.get_curr_vel(),2)}")
-            time.sleep(1)
     
-    speed_thread = threading.Thread(target=speed_print_daemon)
-    speed_thread.daemon = True
-    speed_thread.start()
     
     try:
-        while(True):
-            time.sleep(1)
+        while True:
+            forward()
+            right()
+            forward()
+            right()
+            forward()
+            right()
+            left()
+            backward()
+            left_motor.stop()
+            right_motor.stop()
+            time.sleep(3)
     except KeyboardInterrupt:
+        print("Exiting...")
+    finally:
         left_motor.stop()
         right_motor.stop()
-        pi.stop()
+
+        
